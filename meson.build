@@ -1,5 +1,5 @@
 project('libinput', 'c',
-	version : '1.15.5',
+	version : '1.15.6',
 	license : 'MIT/Expat',
 	default_options : [ 'c_std=gnu99', 'warning_level=2' ],
 	meson_version : '>= 0.41.0')
@@ -329,6 +329,7 @@ quirks_data = [
 	'quirks/30-vendor-microsoft.quirks',
 	'quirks/30-vendor-razer.quirks',
 	'quirks/30-vendor-synaptics.quirks',
+	'quirks/30-vendor-trust.quirks',
 	'quirks/30-vendor-vmware.quirks',
 	'quirks/30-vendor-wacom.quirks',
 	'quirks/50-system-acer.quirks',
@@ -340,6 +341,7 @@ quirks_data = [
 	'quirks/50-system-google.quirks',
 	'quirks/50-system-hp.quirks',
 	'quirks/50-system-lenovo.quirks',
+	'quirks/50-system-sony.quirks',
 	'quirks/50-system-system76.quirks',
 	'quirks/50-system-toshiba.quirks',
 ]

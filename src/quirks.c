@@ -34,6 +34,9 @@
 #include <dirent.h>
 #include <fnmatch.h>
 #include <libgen.h>
+#ifdef __FreeBSD__
+#include <kenv.h>
+#endif
 
 #if HAVE_UDEV
 #include <libudev.h>
@@ -114,6 +117,7 @@ enum bustype {
 	BT_PS2,
 	BT_RMI,
 	BT_I2C,
+	BT_SPI,
 };
 
 enum udev_type {
@@ -355,18 +359,16 @@ property_cleanup(struct property *p)
 }
 
 /**
- * Return the dmi modalias from the udev device.
+ * Return the system DMI info in modalias format.
  */
+#ifdef __linux__
 static inline char *
-init_dmi(void)
+init_dmi_linux(void)
 {
 	char modalias[1024];
 	char *copy = NULL;
 	const char *syspath = "/sys/devices/virtual/dmi/id/modalias";
 	FILE *fp;
-
-	if (getenv("LIBINPUT_RUNNING_TEST_SUITE"))
-		return safe_strdup("dmi:");
 
 	fp = fopen(syspath, "r");
 	if (!fp)
@@ -378,6 +380,73 @@ init_dmi(void)
 	fclose(fp);
 
 	return copy;
+}
+#endif
+
+#ifdef __FreeBSD__
+static inline char *
+init_dmi_freebsd(void)
+{
+#define LEN (KENV_MVALLEN + 1)
+	char *modalias;
+	char bios_vendor[LEN], bios_version[LEN], bios_date[LEN];
+	char sys_vendor[LEN], product_name[LEN], product_version[LEN];
+	char board_vendor[LEN], board_name[LEN], board_version[LEN];
+	char chassis_vendor[LEN], chassis_type[LEN], chassis_version[LEN];
+	int chassis_type_num = 0x2;
+
+	kenv(KENV_GET, "smbios.bios.vendor", bios_vendor, LEN);
+	kenv(KENV_GET, "smbios.bios.version", bios_version, LEN);
+	kenv(KENV_GET, "smbios.bios.reldate", bios_date, LEN);
+	kenv(KENV_GET, "smbios.system.maker", sys_vendor, LEN);
+	kenv(KENV_GET, "smbios.system.product", product_name, LEN);
+	kenv(KENV_GET, "smbios.system.version", product_version, LEN);
+	kenv(KENV_GET, "smbios.planar.maker", board_vendor, LEN);
+	kenv(KENV_GET, "smbios.planar.product", board_name, LEN);
+	kenv(KENV_GET, "smbios.planar.version", board_version, LEN);
+	kenv(KENV_GET, "smbios.chassis.vendor", chassis_vendor, LEN);
+	kenv(KENV_GET, "smbios.chassis.type", chassis_type, LEN);
+	kenv(KENV_GET, "smbios.chassis.version", chassis_version, LEN);
+#undef LEN
+
+	if (strcmp(chassis_type, "Desktop") == 0)
+		chassis_type_num = 0x3;
+	else if (strcmp(chassis_type, "Portable") == 0)
+		chassis_type_num = 0x8;
+	else if (strcmp(chassis_type, "Laptop") == 0)
+		chassis_type_num = 0x9;
+	else if (strcmp(chassis_type, "Notebook") == 0)
+		chassis_type_num = 0xA;
+	else if (strcmp(chassis_type, "Tablet") == 0)
+		chassis_type_num = 0x1E;
+	else if (strcmp(chassis_type, "Convertible") == 0)
+		chassis_type_num = 0x1F;
+	else if (strcmp(chassis_type, "Detachable") == 0)
+		chassis_type_num = 0x20;
+
+	xasprintf(&modalias,
+		"dmi:bvn%s:bvr%s:bd%s:svn%s:pn%s:pvr%s:rvn%s:rn%s:rvr%s:cvn%s:ct%d:cvr%s:",
+		bios_vendor, bios_version, bios_date, sys_vendor, product_name,
+		product_version, board_vendor, board_name, board_version, chassis_vendor,
+		chassis_type_num, chassis_version);
+
+	return modalias;
+}
+#endif
+
+static inline char *
+init_dmi(void)
+{
+	if (getenv("LIBINPUT_RUNNING_TEST_SUITE"))
+		return safe_strdup("dmi:");
+
+#if defined(__linux__)
+	return init_dmi_linux();
+#elif defined(__FreeBSD__)
+	return init_dmi_freebsd();
+#else
+	return NULL;
+#endif
 }
 
 /**
@@ -490,6 +559,8 @@ parse_match(struct quirks_context *ctx,
 			s->match.bus = BT_RMI;
 		else if (streq(value, "i2c"))
 			s->match.bus = BT_I2C;
+		else if (streq(value, "spi"))
+			s->match.bus = BT_SPI;
 		else
 			goto out;
 	} else if (streq(key, "MatchVendor")) {
@@ -1235,6 +1306,10 @@ match_fill_bus_vid_pid(struct match *m,
 		break;
 	case BUS_I2C:
 		m->bus = BT_I2C;
+		m->bits |= M_BUS;
+		break;
+	case BUS_SPI:
+		m->bus = BT_SPI;
 		m->bits |= M_BUS;
 		break;
 	default:

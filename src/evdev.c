@@ -1632,10 +1632,14 @@ evdev_device_get_udev_tags(struct evdev_device *device,
 	if (libevdev_has_event_code(evdev, EV_ABS, ABS_X) &&
 	    libevdev_has_event_code(evdev, EV_ABS, ABS_Y)) {
 		if (libevdev_has_event_code(evdev, EV_KEY, BTN_TOOL_FINGER) &&
-		    !libevdev_has_event_code(evdev, EV_KEY, BTN_TOOL_PEN)) {
+		    !libevdev_has_event_code(evdev, EV_KEY, BTN_TOOL_PEN) &&
+		    !libevdev_has_property(evdev, INPUT_PROP_DIRECT)) {
 			tags |= EVDEV_UDEV_TAG_TOUCHPAD;
 		} else if (libevdev_has_event_code(evdev, EV_KEY, BTN_MOUSE)) {
 			tags |= EVDEV_UDEV_TAG_MOUSE;
+		} else if (libevdev_has_event_code(evdev, EV_KEY, BTN_TOUCH) ||
+		           libevdev_has_property(evdev, INPUT_PROP_DIRECT)) {
+			tags |= EVDEV_UDEV_TAG_TOUCHSCREEN;
 		}
 	}
 #endif
